@@ -78,7 +78,7 @@ __PACKAGE__->add_columns(
   { data_type => "integer", is_nullable => 1 },
 );
 __PACKAGE__->belongs_to(
-	author => 'Local::Schema::User', 'id'
+	author => 'My::Schema::Result::User', 'id'
 );
 
 =head1 PRIMARY KEY
