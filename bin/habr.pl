@@ -31,7 +31,7 @@ GetOptions(
 given ($command) {
 	when ('user') {
 		if (defined $name) {
-			
+			Local::Habr::find_user_by_name('qwerty')
 		}
 		elsif (defined $post) {}
 		elsif (defined $id) {}

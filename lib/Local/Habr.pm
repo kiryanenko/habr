@@ -3,7 +3,7 @@ package Local::Habr;
 use strict;
 use warnings;
 
-use base qw(DBIx::Class::Core);
+use My::Schema;
 
 =encoding utf8
 
@@ -23,8 +23,18 @@ our $VERSION = '1.00';
 
 =cut
 
+my $schema = My::Schema->connect('dbi:Pg:habr:localhost:5432', 'perl', '123456');
 
+my $user = $schema->resultset('User')->create(
+	{ name => 'qwerty'},
+);
 
+sub find_user_by_name {
+	my $name = shift;
+	
+	my $user = $schema->resultset('User')->find({name => $name});
+	p $user;
+}
 
 
 
