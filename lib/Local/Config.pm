@@ -22,19 +22,15 @@ our $VERSION = '1.00';
 =cut
 
 our @db = (
-	'dbi:Pg:habr:localhost:5432',
+	'dbi:Pg:dbname=habr;host=localhost;port=5432',
 	'perl',
 	'123456'
 );
 
-our %memcach = {
-	servers => [
-		{address => 'localhost:11211', weight => 2.5},
-		'192.168.254.2:11211',
-		'/path/to/unix.sock'
-	],
+our %memcach = (
+	servers => [ '127.0.0.1:11211' ],
 	namespace => 'my:',
 	connect_timeout => 0.2,
-};
+);
 
 1;
