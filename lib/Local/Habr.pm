@@ -169,21 +169,21 @@ sub self_commentors {
 	my $commenters = $schema->resultset('Commenter')->search(
 		{ 'post' => 'post.author' }, { join => 'post' }
 	);
-	my @users = $schema->resultset('User')->search({
-		join => $commenters
-	});
+	#$commenters->search()
+	$commenters->search_related('user');
+	
 	my @res = map { get_user_by_name($_->name); } @users;
 	return \@res;
 }
 
 sub desert_posts {
 	my $schema = My::Schema->connect( @Local::Config::db );
-	my @posts = $schema->resultset('Post')->search(
+	my $posts = $schema->resultset('Post')->search(
 		{ 'post' => 'post.author' }, 
 		{ join => 'commenter' }
 	);
 	my @users = $schema->resultset('User')->search({
-		join => $commenters
+		join => $posts
 	});
 	my @res = map { get_user_by_name($_->name); } @users;
 	return \@res;
