@@ -33,6 +33,7 @@ __PACKAGE__->table("posts");
 =head2 author
 
   data_type: 'integer'
+  is_foreign_key: 1
   is_nullable: 1
 
 =head2 theme
@@ -41,39 +42,51 @@ __PACKAGE__->table("posts");
   is_nullable: 1
   size: 100
 
-=head2 rating
+=head2 post_id
 
   data_type: 'integer'
   is_nullable: 1
+
+=head2 rating
+
+  data_type: 'char'
+  is_nullable: 1
+  size: 10
 
 =head2 views
 
-  data_type: 'integer'
+  data_type: 'char'
   is_nullable: 1
+  size: 10
 
 =head2 stars
 
-  data_type: 'integer'
+  data_type: 'char'
   is_nullable: 1
+  size: 10
 
 =cut
 
 __PACKAGE__->add_columns(
   "id",
-  { data_type => "integer", is_nullable => 0 },
+  {
+    data_type         => "integer",
+    is_auto_increment => 1,
+    is_nullable       => 0,
+    sequence          => "user_ids",
+  },
   "author",
-  { data_type => "integer", is_nullable => 1 },
+  { data_type => "integer", is_foreign_key => 1, is_nullable => 1 },
   "theme",
   { data_type => "char", is_nullable => 1, size => 100 },
+  "post_id",
+  { data_type => "integer", is_nullable => 1 },
   "rating",
-  { data_type => "integer", is_nullable => 1 },
+  { data_type => "char", is_nullable => 1, size => 10 },
   "views",
-  { data_type => "integer", is_nullable => 1 },
+  { data_type => "char", is_nullable => 1, size => 10 },
   "stars",
-  { data_type => "integer", is_nullable => 1 },
-);
-__PACKAGE__->belongs_to(
-	author => 'My::Schema::Result::User', 'id'
+  { data_type => "char", is_nullable => 1, size => 10 },
 );
 
 =head1 PRIMARY KEY
@@ -88,9 +101,60 @@ __PACKAGE__->belongs_to(
 
 __PACKAGE__->set_primary_key("id");
 
+=head1 UNIQUE CONSTRAINTS
 
-# Created by DBIx::Class::Schema::Loader v0.07045 @ 2016-11-15 23:41:49
-# DO NOT MODIFY THIS OR ANYTHING ABOVE! md5sum:pUGaOE+zvyZoA+Y40EYl8g
+=head2 C<posts_post_id_key>
+
+=over 4
+
+=item * L</post_id>
+
+=back
+
+=cut
+
+__PACKAGE__->add_unique_constraint("posts_post_id_key", ["post_id"]);
+
+=head1 RELATIONS
+
+=head2 author
+
+Type: belongs_to
+
+Related object: L<My::Schema::Result::User>
+
+=cut
+
+__PACKAGE__->belongs_to(
+  "author",
+  "My::Schema::Result::User",
+  { id => "author" },
+  {
+    is_deferrable => 0,
+    join_type     => "LEFT",
+    on_delete     => "NO ACTION",
+    on_update     => "NO ACTION",
+  },
+);
+
+=head2 commenters
+
+Type: has_many
+
+Related object: L<My::Schema::Result::Commenter>
+
+=cut
+
+__PACKAGE__->has_many(
+  "commenters",
+  "My::Schema::Result::Commenter",
+  { "foreign.post_id" => "self.id" },
+  { cascade_copy => 0, cascade_delete => 0 },
+);
+
+
+# Created by DBIx::Class::Schema::Loader v0.07045 @ 2016-11-18 06:03:19
+# DO NOT MODIFY THIS OR ANYTHING ABOVE! md5sum:+uAihTfLfWZMqOGiz7/Oeg
 
 
 # You can replace this text with custom code or comments, and it will be preserved on regeneration

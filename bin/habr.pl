@@ -30,7 +30,7 @@ GetOptions(
 	'id=i' => \$id,
 	'post=i' => \$post,
 	'n=i' => \$n,
-	'refresh' => $refresh
+	'refresh' => \$refresh
 );
 
 my $struct;
@@ -41,9 +41,15 @@ given ($command) {
 		elsif (defined $id) {}
 		else { die "Неизвестный ключ" }
 	}
-	when ('commenters') {}
-	when ('post') {}
-	when ('self_commentors') {}
+	when ('commenters') {
+		if (defined $post) { $struct = Local::Habr::get_commenters_in_post($post, $refresh); }
+		else { die "Неизвестный ключ" }
+	}
+	when ('post') {
+		if (defined $id) { $struct = Local::Habr::get_post($id, $refresh); }
+		else { die "Неизвестный ключ" }
+	}
+	when ('self_commentors') { Local::Habr::self_commentors; }
 	when ('desert_posts') {}
 	default { die 'Неизвестная команда!' }
 }
