@@ -108,7 +108,7 @@ sub get_post {
 
 		$dom_tree->getElementsByClassName('author-info__nickname')->[0]->as_text =~ /@(\w+)/;
 		my $author = $1;
-		my $theme = $dom_tree->getElementsByClassName('post__title')->[0]->as_text;
+		my $theme = $dom_tree->getElementsByClassName('post__title')->[0]->getElementsByTagName('span')->[1]->as_text;
   		my $views = $dom_tree->getElementsByClassName('views-count_post')->[0]->as_text;
   		my $rating = $dom_tree->getElementsByClassName('js-score')->[0]->as_text;
 
@@ -129,6 +129,7 @@ sub get_post {
 	  		my $post_record;
 	  		if ( $refresh and $post_record = $schema->resultset('Post')->find({ post_id => $post }) ) { $post_record->update(\%post_atr); }
 	  		else { $post_record = $schema->resultset('Post')->create(\%post_atr); }
+	  		$post_record->commenters->delete_all;
 	  		# добовляю комментаторов в бд
 	  		for ( $dom_tree->getElementsByClassName('comment-item__username') ) {
   				my $name = $_->as_text;
@@ -166,26 +167,24 @@ sub get_commenters_in_post {
 
 sub self_commentors {
 	my $schema = My::Schema->connect( @Local::Config::db );
-	my $commenters = $schema->resultset('Commenter')->search(
-		{ 'post' => 'post.author' }, { join => 'post' }
-	);
-	#$commenters->search()
-	$commenters->search_related('user');
-	
-	my @res = map { get_user_by_name($_->name); } @users;
+	my @commenters = $schema->resultset('Commenter')->search(
+		{ 'user_id' => 'post.author' }, { join => 'post' }
+	)->search_related('user');
+	my @res = map { get_user_by_name($_->name); } @commenters;
 	return \@res;
 }
 
 sub desert_posts {
+	my $n = shift;
+	
 	my $schema = My::Schema->connect( @Local::Config::db );
-	my $posts = $schema->resultset('Post')->search(
-		{ 'post' => 'post.author' }, 
-		{ join => 'commenter' }
-	);
-	my @users = $schema->resultset('User')->search({
-		join => $posts
-	});
-	my @res = map { get_user_by_name($_->name); } @users;
+	my @posts = $schema->resultset('Post')->all();
+	my @res = map { {
+	  			post_id => $_->post_id,
+	  			theme => $_->theme, 
+	  			views => $_->views, 
+	  			rating => $_->rating
+	  		}; } grep { $_->commenters->count < $n; } @posts;
 	return \@res;
 }
 

@@ -8,6 +8,7 @@ use lib "$FindBin::Bin/../lib";
 use Getopt::Long;
 use Local::Habr;
 use JSON::XS;
+use XML::Simple qw(:strict);
 use DDP;
 
 use 5.010;  # for say, given/when
@@ -18,7 +19,6 @@ BEGIN{
 	}
 }
 no warnings 'experimental';
-
 
 my $command = shift;
 
@@ -50,12 +50,15 @@ given ($command) {
 		else { die "Неизвестный ключ" }
 	}
 	when ('self_commentors') { Local::Habr::self_commentors; }
-	when ('desert_posts') {}
+	when ('desert_posts') {
+		if (defined $n) { $struct = Local::Habr::desert_posts($n); }
+		else { die "Неизвестный ключ" }
+	}
 	default { die 'Неизвестная команда!' }
 }
-p $struct;
+
 given ($format) {
 	when ('json') { say JSON::XS::encode_json($struct); }
-	when ('xml') {}
+	when ('ddp') { p $struct; }
 	default { say JSON::XS::encode_json($struct); }
 }
