@@ -167,9 +167,9 @@ sub get_commenters_in_post {
 
 sub self_commentors {
 	my $schema = My::Schema->connect( @Local::Config::db );
-	my @commenters = $schema->resultset('Commenter')->search(
-		{ 'user_id' => 'post.author' }, { join => 'post' }
-	)->search_related('user');
+	my @commenters = $schema->resultset('User')->search(
+		{ 'commenters.user_id' => \'= posts.author' }, { join => ['posts', 'commenters'] }
+	);
 	my @res = map { get_user_by_name($_->name); } @commenters;
 	return \@res;
 }
@@ -179,12 +179,7 @@ sub desert_posts {
 	
 	my $schema = My::Schema->connect( @Local::Config::db );
 	my @posts = $schema->resultset('Post')->all();
-	my @res = map { {
-	  			post_id => $_->post_id,
-	  			theme => $_->theme, 
-	  			views => $_->views, 
-	  			rating => $_->rating
-	  		}; } grep { $_->commenters->count < $n; } @posts;
+	my @res = map { get_post($_->post_id); } grep { $_->commenters->count < $n; } @posts;
 	return \@res;
 }
 

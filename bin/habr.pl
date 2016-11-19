@@ -49,7 +49,7 @@ given ($command) {
 		if (defined $id) { $struct = Local::Habr::get_post($id, $refresh); }
 		else { die "Неизвестный ключ" }
 	}
-	when ('self_commentors') { Local::Habr::self_commentors; }
+	when ('self_commentors') { $struct = Local::Habr::self_commentors; }
 	when ('desert_posts') {
 		if (defined $n) { $struct = Local::Habr::desert_posts($n); }
 		else { die "Неизвестный ключ" }
@@ -60,5 +60,5 @@ given ($command) {
 given ($format) {
 	when ('json') { say JSON::XS::encode_json($struct); }
 	when ('ddp') { p $struct; }
-	default { say JSON::XS::encode_json($struct); }
+	default {  p $struct; }
 }
