@@ -3,12 +3,11 @@ package Local::Habr;
 use strict;
 use warnings;
 
-use My::Schema;
+use Local::Schema;
 use Cache::Memcached::Fast;
 use JSON::XS;
-use LWP::UserAgent;
-use HTML::DOM;
 use Local::Config;
+use Local::Parser;
 use DDP;
 
 =encoding utf8
@@ -53,7 +52,7 @@ sub get_user_by_name {
 		$res = get_memcached($name);	
 		return $res if $res;
 		
-		my $schema = My::Schema->connect( @Local::Config::db );
+		my $schema = Local::Schema->connect( @Local::Config::db );
 		if (defined( my $user = $schema->resultset('User')->find({name => $name}) )) { 
 			$res = { name => $user->name, karma => $user->karma, rating => $user->rating };
 			set_memcached $name, $res;
@@ -61,22 +60,11 @@ sub get_user_by_name {
 		}
 	}
 	
-	my $response = LWP::UserAgent->new()->get("http://habrahabr.ru/users/$name/");
-	if ($response->is_success()) {
-		my $dom_tree = new HTML::DOM;
-		$dom_tree->write($response->decoded_content);
-  		$dom_tree->close;
-
-  		my $karma = $dom_tree->getElementsByClassName('voting-wjt__counter-score js-karma_num')->[0]->as_text;
-  		my $rating = $dom_tree->getElementsByClassName('statistic__value statistic__value_magenta')->[0]->as_text;
-
-  		if (defined $karma && defined $rating) {
-	  		$res = { name => $name, karma => $karma, rating => $rating };
-	  		my $schema = My::Schema->connect( @Local::Config::db );
-	  		if ( $refresh and my $user = $schema->resultset('User')->find({name => $name}) ) { $user->update($res); }
-	  		else { $schema->resultset('User')->create($res); }
-			set_memcached $name, $res;
-		}
+	if (defined( $res = Local::Parser::user($name) )) {
+		my $schema = Local::Schema->connect( @Local::Config::db );
+		if ( $refresh and my $user = $schema->resultset('User')->find({name => $name}) ) { $user->update($res); }
+		else { $schema->resultset('User')->create($res); }
+		set_memcached $name, $res;
 	}
 	
 	return $res;
@@ -88,7 +76,7 @@ sub get_post {
 	my $res;
 
 	unless ($refresh) {
-		my $schema = My::Schema->connect( @Local::Config::db );
+		my $schema = Local::Schema->connect( @Local::Config::db );
 		if (defined( my $post = $schema->resultset('Post')->find({post_id => $post}) )) {
 			$res = {
 	  			post_id => $post->post_id,
@@ -100,45 +88,30 @@ sub get_post {
 		}
 	}
 
-	my $response = LWP::UserAgent->new()->get("http://habrahabr.ru/post/$post/");
-	if ($response->is_success()) {
-		my $dom_tree = new HTML::DOM;
-		$dom_tree->write($response->decoded_content);
-  		$dom_tree->close;
+	if (defined( $res = Local::Parser::post($post) )) {
+		my $author = $res->{author};
+		my @commenters = $res->{commenters};
+		delete $res->{author};
+		delete $res->{commenters};
+		
+		get_user_by_name($author, $refresh);	# обновляю автора в бд
 
-		$dom_tree->getElementsByClassName('author-info__nickname')->[0]->as_text =~ /@(\w+)/;
-		my $author = $1;
-		my $theme = $dom_tree->getElementsByClassName('post__title')->[0]->getElementsByTagName('span')->[1]->as_text;
-  		my $views = $dom_tree->getElementsByClassName('views-count_post')->[0]->as_text;
-  		my $rating = $dom_tree->getElementsByClassName('js-score')->[0]->as_text;
+  		my $schema = Local::Schema->connect( @Local::Config::db );
+  		my %post_atr = %$res;
+  		$post_atr{author} = $schema->resultset('User')->find({name => $author});
 
-  		if ( defined $author && defined $theme && defined $views && defined $rating ) {
-  			get_user_by_name($author, $refresh);	# добовляю автора в бд
-  			
-  			$res = {
-	  			post_id => $post,
-	  			theme => $theme, 
-	  			views => $views, 
-	  			rating => $rating
-	  		};
-	  		  		
-	  		my $schema = My::Schema->connect( @Local::Config::db );
-	  		my %post_atr = %$res;
-	  		$post_atr{author} = $schema->resultset('User')->find({name => $author});
+  		my $post_record;
+  		if ( $refresh and $post_record = $schema->resultset('Post')->find({ post_id => $post }) ) { $post_record->update(\%post_atr); }
+  		else { $post_record = $schema->resultset('Post')->create(\%post_atr); }
 	  		
-	  		my $post_record;
-	  		if ( $refresh and $post_record = $schema->resultset('Post')->find({ post_id => $post }) ) { $post_record->update(\%post_atr); }
-	  		else { $post_record = $schema->resultset('Post')->create(\%post_atr); }
-	  		$post_record->commenters->delete_all;
-	  		# добовляю комментаторов в бд
-	  		for ( $dom_tree->getElementsByClassName('comment-item__username') ) {
-  				my $name = $_->as_text;
-  				get_user_by_name($name, $refresh);
-  				my $user = $schema->resultset('User')->find({name => $name});
-  				unless ( $schema->resultset('Commenter')->find({ user => $user, post => $post_record }) ) {
-	  				$schema->resultset('Commenter')->create({ user => $user, post => $post_record });
-  				}
-  			}
+  		# добовляю комментаторов в бд
+  		$post_record->commenters->delete_all;	  		
+  		for ( @commenters ) {
+			get_user_by_name($_, $refresh);
+			my $user = $schema->resultset('User')->find({ name => $_ });
+			unless ( $schema->resultset('Commenter')->find({ user => $user, post => $post_record }) ) {
+				$schema->resultset('Commenter')->create({ user => $user, post => $post_record });
+			}
 		}
 	}
 	return $res;
@@ -149,7 +122,7 @@ sub get_user_by_post {
 	my $refresh = shift;
 
 	get_post($post, $refresh);
-	my $schema = My::Schema->connect( @Local::Config::db );
+	my $schema = Local::Schema->connect( @Local::Config::db );
 	my $post_record = $schema->resultset('Post')->find({ post_id => $post });
 	return get_user_by_name( $post_record->author->name, $refresh );
 }
@@ -159,14 +132,14 @@ sub get_commenters_in_post {
 	my $refresh = shift;
 	
 	get_post($post, $refresh);
-	my $schema = My::Schema->connect( @Local::Config::db );
+	my $schema = Local::Schema->connect( @Local::Config::db );
 	my $post_record = $schema->resultset('Post')->find({ post_id => $post });
 	my @res = map { get_user_by_name($_->user->name, $refresh); } $post_record->commenters;
 	return \@res;
 }
 
 sub self_commentors {
-	my $schema = My::Schema->connect( @Local::Config::db );
+	my $schema = Local::Schema->connect( @Local::Config::db );
 	my @commenters = $schema->resultset('User')->search(
 		{ 'commenters.user_id' => \'= posts.author' }, { join => ['posts', 'commenters'] }
 	);
@@ -177,7 +150,7 @@ sub self_commentors {
 sub desert_posts {
 	my $n = shift;
 	
-	my $schema = My::Schema->connect( @Local::Config::db );
+	my $schema = Local::Schema->connect( @Local::Config::db );
 	my @posts = $schema->resultset('Post')->all();
 	my @res = map { get_post($_->post_id); } grep { $_->commenters->count < $n; } @posts;
 	return \@res;
